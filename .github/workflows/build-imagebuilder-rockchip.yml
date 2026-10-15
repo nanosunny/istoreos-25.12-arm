@@ -128,7 +128,7 @@ jobs:
       id: extract
       run: |
         cd ${{ steps.download.outputs.workdir }}
-        tar xf istoreos-imagebuilder-*.tar.xz
+        tar xf istoreos-imagebuilder-*.tar.zst
         IB_DIR=$(ls -d istoreos-*/ | head -1)
         mv "$IB_DIR" imagebuilder
         echo "ibdir=${{ steps.download.outputs.workdir }}/imagebuilder" >> $GITHUB_OUTPUT
