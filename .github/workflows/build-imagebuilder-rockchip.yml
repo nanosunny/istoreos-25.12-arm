@@ -93,8 +93,8 @@ jobs:
         RESOLVED_VER="$VERSION"
         if [ "$VERSION" = "LATEST" ]; then
           for mirror in \
-            "https://downloads.istoreos.com/${TARGET}" \
-            "https://fw.koolcenter.com/iStoreOS/${TARGET}"; do
+            "https://fw.koolcenter.com/iStoreOS/ib/armsr/" \
+            "https://fw20.koolcenter.com/iStoreOS/ib/armsr/"; do
             echo "尝试镜像源: $mirror"
             if LATEST_VER=$(curl -sL --connect-timeout 8 "${mirror}/LATEST"); then
               if [ -n "$LATEST_VER" ]; then
@@ -105,18 +105,18 @@ jobs:
               fi
             fi
           done
-          [ -z "$BASE_URL" ] && BASE_URL="https://downloads.istoreos.com/iStoreOS/${TARGET}"
+          [ -z "$BASE_URL" ] && BASE_URL="https://fw.koolcenter.com/iStoreOS/ib/armsr/"
         else
-          BASE_URL="https://downloads.istoreos.com/iStoreOS/${TARGET}"
+          BASE_URL="https://fw20.koolcenter.com/iStoreOS/ib/armsr/"
         fi
 
-        IB_NAME="istoreos-imagebuilder-${TARGET}-${SUBTARGET}.${RESOLVED_VER}.tar.xz"
+        IB_NAME="istoreos-imagebuilder-armsr-armv8.Linux-x86_64.tar.zst"
         IB_URL="${BASE_URL}/${IB_NAME}"
         echo "下载地址: $IB_URL"
 
         if ! curl -fL --connect-timeout 20 --retry 3 -o "$IB_NAME" "$IB_URL"; then
           echo "版本号命名文件找不到，尝试 LATEST 别名..."
-          IB_URL="${BASE_URL}/istoreos-imagebuilder-${TARGET}-${SUBTARGET}.LATEST.tar.xz"
+          IB_URL="${BASE_URL}/istoreos-imagebuilder-armsr-armv8.Linux-x86_64.tar.zst"
           curl -fL --connect-timeout 20 --retry 3 -o "$IB_NAME" "$IB_URL"
         fi
 
