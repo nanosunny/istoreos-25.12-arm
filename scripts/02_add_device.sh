@@ -70,8 +70,8 @@ cp -f $GITHUB_WORKSPACE/configfiles/dts/rk3568/rk3568-r68p.dts target/linux/rock
 sed -i '0,/^\tcase "$board" in$/s//&\n\tnsy,g68-plus)\n\t\tucidef_set_interfaces_lan_wan "lan1 lan2 lan3 lan4" "wan"\n\t\t;;/' \
   target/linux/rockchip/armv8/base-files/etc/board.d/02_network
 
-# 网口：R68P 是双口 RK3568 盒子，eth0(靠近电源口)=LAN, eth1=WAN，基于 DTS 别名固定枚举顺序
-sed -i '0,/^\tcase "$board" in$/s//&\n\tr68p,rk3568)\n\t\tucidef_set_interfaces_lan_wan "eth0" "eth1"\n\t\t;;/' \
+# 网口：R68P 是单网口 RK3568 盒子，仅板载1个RJ45作为LAN口，可通过USB网卡扩展WAN做单臂路由
+sed -i '0,/^\tcase "$board" in$/s//&\n\tr68p,rk3568)\n\t\tucidef_set_interface_lan "eth0" "dhcp"\n\t\t;;/' \
   target/linux/rockchip/armv8/base-files/etc/board.d/02_network
 
 # G68-PLUS：MT7916 无线（开源 mt76，板载 efuse 为空时读取默认 eeprom）+ RTL8367S 网口灯
