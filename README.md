@@ -52,8 +52,9 @@
 | 设备         |  状态     |  包名                                                                  | 备注                        |
 |-------------|:---------:| ----------------------------------------------------------------------- |:----------------------------:|
 | panther-x2  |    ✅    | istoreos-rockchip-armv8-panther_panther-x2-squashfs-sysupgrade.img.gz   | 🟢 已测试（Rockchip RK3566）     |
-| g68-plus    |    ✅    | istoreos-rockchip-armv8-nsy_g68-plus-squashfs-sysupgrade.img.gz         | 🟡 未测试（Rockchip RK3566）     |
-| **R68P**    |    ✅    | istoreos-rockchip-armv8-r68p_r68p-squashfs-sysupgrade.img.gz            | 🟢 已修复网卡错位（Rockchip RK3568 双网口盒子） |
+| g68-plus    |    ✅    | istoreos-rockchip-armv8-nsy_g68-plus-squashfs-sysupgrade.img.gz         | 🟡 未测试（Rockchip RK3568）     |
+| **R68P**    |    ✅    | istoreos-rockchip-armv8-r68p_r68p-squashfs-sysupgrade.img.gz            | 🟡 未测试（Rockchip RK3568）
+|
 | 魔百和 M302A|    ✅    | istoreos-s905l3b-m302a-*.img.gz                                          | 🟡 新增（Amlogic S905L3B，需U盘启动） |
 | 其他        |    ⏳    |                                                                          |                              |
 
