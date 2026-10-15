@@ -24,6 +24,8 @@
 > [!TIP]
 > 📢本项目提供了一个 **将第三方 rockchip 设备适配至 iStoreOS 官方源码** 的参考实现，支持通过源码编译生成 **`sysupgrade`** 格式固件。该格式可手动在线刷写升级， **一次适配，持续更新** ，告别重复刷机
 > 
+> 😂如果您在适配其他 RK 机型时遇到困难，欢迎您直接使用右侧项目😂👉👉👉[iStoreOS-Actions](https://github.com/Kwonelee/iStoreOS-Actions)
+> 
 > 当前默认编译 **iStoreOS 25.12（内核 6.12）**，如需旧版可将 `.github/workflows/build-istoreos-6.x.yml` 中的 `REPO_BRANCH` 改回 `istoreos-24.10`
 > 
 > 使用此仓库必须设置机密token，Actions云编译固件时需要用到，通常在仓库设置里面。机密键名为 **`GH_TOKEN`**（严禁在仓库可视代码中填写，否则后果自负）
@@ -52,27 +54,28 @@
 | 设备         |  状态     |  包名                                                                  | 备注                        |
 |-------------|:---------:| ----------------------------------------------------------------------- |:----------------------------:|
 | panther-x2  |    ✅    | istoreos-rockchip-armv8-panther_panther-x2-squashfs-sysupgrade.img.gz   | 🟢 已测试（Rockchip RK3566）     |
-| g68-plus    |    ✅    | istoreos-rockchip-armv8-nsy_g68-plus-squashfs-sysupgrade.img.gz         | 🟡 未测试（Rockchip RK3568）     |
-| **R68P**    |    ✅    | istoreos-rockchip-armv8-r68p_r68p-squashfs-sysupgrade.img.gz            | 🟡 未测试（Rockchip RK3568）
-|
+| g68-plus    |    ✅    | istoreos-rockchip-armv8-nsy_g68-plus-squashfs-sysupgrade.img.gz         | 🟡 未测试（Rockchip RK3568，4LAN+1WAN交换芯片+MT7916 WiFi）     |
+| **R68P**    |    ✅    | istoreos-rockchip-armv8-r68p_r68p-squashfs-sysupgrade.img.gz            | 🟢 单网口配置（Rockchip RK3568，可USB网卡扩展WAN做单臂路由） |
 | 魔百和 M302A|    ✅    | istoreos-s905l3b-m302a-*.img.gz                                          | 🟡 新增（Amlogic S905L3B，需U盘启动） |
 | 其他        |    ⏳    |                                                                          |                              |
 
 ✅ 支持 - ⏳ 计划中 - ⭕ 不支持
 
-### 🎛️ R68P（RK3568 双网口盒子）说明
+### 🎛️ R68P（RK3568 单网口盒子）说明
 
-R68P 是 RK3568 双网口盒子，硬件接近 Radxa ROCK 3A，刷 ROCK 3A 的 Armbian 可正常启动，但刷通用 ROCK 3A OpenWrt 会出现**WAN/LAN 错位**（启动后活跃口变 WAN，另一个口显示 LAN 但链路 down）。本仓库做了以下针对性修复：
+R68P 是 RK3568 单网口盒子，硬件接近 Radxa ROCK 3A，刷 ROCK 3A 的 Armbian 可正常启动。本仓库针对单网口硬件做了专属适配：
 
-1. **专属 DTS**（`configfiles/dts/rk3568/rk3568-r68p.dts`）：显式设置 `ethernet0 = &gmac0`、`ethernet1 = &gmac1`，从内核层面固定网卡枚举顺序，避免随机错位；同时对两个 RTL8211F PHY 分别配置 reset GPIO 和 tx/rx 延迟，保证两路 rgmii 链路都能正常 Link Up。
-2. **`02_network` 网口绑定**：`r68p,rk3568` 板型固定 `ucidef_set_interfaces_lan_wan "eth0" "eth1"`，靠近电源口的 RJ45 为 LAN，另一个为 WAN。
+1. **专属 DTS**（`configfiles/dts/rk3568/rk3568-r68p.dts`）：**显式禁用硬件未引出的 GMAC1**，避免内核枚举到不存在的"幽灵网口"导致接口配置混乱；保留 GMAC0 作为唯一板载网口，配置 RTL8211F PHY reset 时序保证链路稳定。
+2. **`02_network` 网口绑定**：`r68p,rk3568` 板型固定 `ucidef_set_interface_lan "eth0" "dhcp"`，唯一 RJ45 默认作为 LAN 口，DHCP 自动开启。
 3. **兼容性**：`SUPPORTED_DEVICES` 同时追加了 `radxa,rock-3a` 兼容标记，因此**已有 ROCK 3A 系统的设备也可以直接刷 sysupgrade 包升级**，无需重新写盘。
+4. **单臂路由扩展**：默认单LAN模式适合旁路由/All-in-One场景；如需做主路由，插入USB千兆网卡后在Web「网络 → 接口」将新增USB网卡设为WAN口即可。
 
 **刷机流程（R68P）：**
 1. 先跑 `Sync Files`，再跑 `Build iStore OS 6.x`；
 2. 下载 `istoreos-rockchip-armv8-r68p_r68p-squashfs-sysupgrade.img.gz`；
 3. 写 SD 卡插入盒子启动，或者从 ROCK 3A 系统的 Web 升级界面直接选 sysupgrade 包（保留配置）升级；
-4. 启动后 LAN 口默认 IP `192.168.100.1`，插线即能进管理页。
+4. 启动后唯一网口默认 LAN IP `192.168.100.1`，直接插电脑即可进管理页；
+5. 如需安装到内置 eMMC，可在 Web 「系统 → 磁盘管理」或 SSH 执行内置 eMMC 写入脚本完成。
 
 ### 📺 Amlogic 魔百和 M302A 说明
 
