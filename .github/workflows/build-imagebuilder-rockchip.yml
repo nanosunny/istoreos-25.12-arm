@@ -19,7 +19,7 @@ on:
       devices:
         description: '要打包的设备（逗号分隔，默认全选）'
         required: true
-        default: 'panther_panther-x2,nsy_g68-plus,r68p_r68p,firefly_station-m2'
+        default: 'panther_panther-x2,nsy_g68-plus,r68p_r68p'
       extra_packages:
         description: '额外预装软件包（空格分隔，可留空）'
         required: false
@@ -59,7 +59,7 @@ jobs:
         echo "===== 打包参数 ====="
         echo "iStoreOS版本: ${{ inputs.istoreos_version || 'LATEST' }}"
         echo "内核分支: ${{ inputs.kernel_branch || '6.12' }}"
-        echo "目标设备: ${{ inputs.devices || 'panther_panther-x2,nsy_g68-plus,r68p_r68p,firefly_station-m2' }}"
+        echo "目标设备: ${{ inputs.devices || 'panther_panther-x2,nsy_g68-plus,r68p_r68p' }}"
         echo "额外包: '${{ inputs.extra_packages }}'"
 
     - name: 安装依赖
