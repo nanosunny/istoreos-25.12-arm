@@ -93,7 +93,7 @@ jobs:
         RESOLVED_VER="$VERSION"
         if [ "$VERSION" = "LATEST" ]; then
           for mirror in \
-            "https://fw0.koolcenter.com/iStoreOS/${TARGET}" \
+            "https://downloads.istoreos.com/${TARGET}" \
             "https://fw1.koolcenter.com/iStoreOS/${TARGET}"; do
             echo "尝试镜像源: $mirror"
             if LATEST_VER=$(curl -sL --connect-timeout 8 "${mirror}/LATEST"); then
@@ -105,9 +105,9 @@ jobs:
               fi
             fi
           done
-          [ -z "$BASE_URL" ] && BASE_URL="https://fw0.koolcenter.com/iStoreOS/${TARGET}"
+          [ -z "$BASE_URL" ] && BASE_URL="https://downloads.istoreos.com/iStoreOS/${TARGET}"
         else
-          BASE_URL="https://fw0.koolcenter.com/iStoreOS/${TARGET}"
+          BASE_URL="https://downloads.istoreos.com/iStoreOS/${TARGET}"
         fi
 
         IB_NAME="istoreos-imagebuilder-${TARGET}-${SUBTARGET}.${RESOLVED_VER}.tar.xz"
