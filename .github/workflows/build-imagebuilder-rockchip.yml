@@ -148,7 +148,7 @@ jobs:
         IB_DIR="${{ steps.extract.outputs.ibdir }}"
         cd "$IB_DIR"
 
-        DEVICES_STR="${{ inputs.devices || 'panther_panther-x2,nsy_g68-plus,r68p_r68p,firefly_station-m2' }}"
+        DEVICES_STR="${{ inputs.devices || 'panther_panther-x2,nsy_g68-plus,r68p_r68p' }}"
         EXTRA_PKGS="${{ inputs.extra_packages }}"
 
         # 基础预装软件包（与完整编译版本一致）
