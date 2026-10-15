@@ -1,0 +1,269 @@
+name: Build iStore OS for Amlogic (M302A)
+
+on:
+  repository_dispatch:
+  workflow_dispatch:
+    inputs:
+      kernel_version:
+        description: 'ophub/flippy 内核版本（默认 6.1.y）'
+        required: false
+        default: '6.1.y'
+      soc:
+        description: 'SoC 型号（s905l3b）'
+        required: false
+        default: 's905l3b'
+      box:
+        description: '盒子型号（M302A/M304A）'
+        required: false
+        default: 'M302A/M304A'
+
+env:
+  REPO_URL: https://github.com/istoreos/istoreos
+  FEEDS_CONF: feeds.conf
+  CONFIG_FILE: .config
+  DIY_SH: scripts-amlogic/00_prepare_amlogic.sh
+  OPUB_REPO_URL: https://github.com/ophub/amlogic-s9xxx-openwrt.git
+  KERNEL_VERSION: ${{ github.event.inputs.kernel_version || '6.1.y' }}
+  SOC: ${{ github.event.inputs.soc || 's905l3b' }}
+  BOX: ${{ github.event.inputs.box || 'M302A/M304A' }}
+  UPLOAD_BIN_DIR: true
+  UPLOAD_FIRMWARE: true
+  UPLOAD_RELEASE: true
+  GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+    - name: 合并磁盘
+      uses: sbwml/actions@free-disk
+
+    - name: 检出代码
+      uses: actions/checkout@main
+
+    - name: 创建工作目录
+      run: |
+        mkdir -p ${GITHUB_WORKSPACE}/workdir
+        chmod 755 ${GITHUB_WORKSPACE}/workdir
+        echo "WORKDIR_PATH=$PWD" >> $GITHUB_ENV
+        sudo timedatectl set-timezone 'Asia/Shanghai'
+
+    - name: 检查服务器配置
+      run: |
+        echo -e "\n\e[1;32mCPU:\e[0m"
+        echo "$(grep 'model name' /proc/cpuinfo | head -1 | awk -F ': ' '{print $2}') x $(grep processor /proc/cpuinfo  | wc -l)"
+        echo -e "\n\e[1;32mMemory:\e[0m"
+        free -h
+        echo -e "\n\e[1;32mStorage:\e[0m"
+        df -Th / /mnt
+
+    - name: 初始化编译环境
+      shell: bash
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        sudo rm -rf /etc/apt/sources.list.d
+        sudo bash -c "curl -skL https://raw.githubusercontent.com/sbwml/actions/openwrt-build-setup/sources-24.04.list > /etc/apt/sources.list"
+        sudo apt-get update
+        sudo apt-get install -y build-essential flex bison cmake g++ gawk gcc-multilib g++-multilib gettext git gnutls-dev libfuse-dev libncurses5-dev libssl-dev python3 python3-pip python3-ply python3-pyelftools rsync unzip zlib1g-dev file wget subversion patch upx-ucl autoconf automake curl asciidoc binutils bzip2 lib32gcc-s1 libc6-dev-i386 uglifyjs msmtp texinfo libreadline-dev libglib2.0-dev xmlto libelf-dev libtool autopoint antlr3 gperf ccache swig coreutils haveged scons libpython3-dev rename qemu-utils jq p7zip p7zip-full btrfs-progs dosfstools e2fsprogs parted losetup uuid-runtime
+        sudo apt-get clean
+
+    - name: 克隆 iStoreOS 源码
+      working-directory: ${{ env.WORKDIR_PATH }}/workdir
+      run: |
+        df -hT $PWD
+        git clone --depth=1 $REPO_URL -b istoreos-25.12 openwrt
+        ln -sf ${{ env.WORKDIR_PATH }}/workdir/openwrt $GITHUB_WORKSPACE/openwrt
+
+    - name: 缓存构建动作
+      uses: klever1988/cachewrtbuild@main
+      with:
+        ccache: 'true'
+        mixkey: ubuntu-24.04-amlogic-istoreos-25.12
+        prefix: ${{ github.workspace }}/openwrt
+
+    # ========== 阶段1：编译 iStoreOS rootfs (armsr/armv8) ==========
+    - name: 加载自定义 feeds
+      run: |
+        FEEDS_CONF_PATH=amlogic/$FEEDS_CONF
+        [ -e $FEEDS_CONF_PATH ] && mv $FEEDS_CONF_PATH openwrt/$FEEDS_CONF
+        cd openwrt
+        # 让自定义脚本里的相对路径 files/ 正确落到 openwrt/files
+        chmod +x $GITHUB_WORKSPACE/$DIY_SH
+        $GITHUB_WORKSPACE/$DIY_SH
+
+    - name: 更新 feeds
+      run: |
+        cd openwrt
+        ./scripts/feeds update -a
+        ./scripts/feeds install -a
+
+    - name: 加载自定义配置
+      run: |
+        CONFIG_FILE_PATH=amlogic/$CONFIG_FILE
+        [ -e openwrt/files ] || mkdir -p openwrt/files
+        [ -e $CONFIG_FILE_PATH ] && mv $CONFIG_FILE_PATH openwrt/$CONFIG_FILE
+        cd openwrt
+        cat $CONFIG_FILE >> ./.config.tmp 2>/dev/null || true
+
+    - name: 生成默认配置并下载软件包
+      run: |
+        cd openwrt
+        make defconfig
+        make download -j8
+        find dl -size -1024c -exec ls -l {} \; || true
+        find dl -size -1024c -exec rm -f {} \; || true
+
+    - name: 编译 rootfs
+      id: compile
+      run: |
+        cd openwrt
+        echo -e "$(nproc) thread compile"
+        if ! make -j$(nproc); then
+          echo "::error::多线程编译失败，输出详细日志..."
+          echo "::group::📋 详细编译日志（V=s）"
+          make -j1 V=s
+          echo "::endgroup::"
+          exit 1
+        fi
+        echo "FILE_DATE=_$(date +"%Y%m%d%H%M")" >> $GITHUB_ENV
+        echo "status=success" >> ${GITHUB_OUTPUT}
+
+    - name: 定位 rootfs 产物
+      id: pick_rootfs
+      if: steps.compile.outputs.status == 'success'
+      run: |
+        cd openwrt/bin/targets/armsr/armv8
+        ls -la
+        ROOTFS=$(ls *armsr-armv8-generic-rootfs.tar.gz | head -1)
+        if [ -z "$ROOTFS" ]; then
+          echo "::error::未找到 rootfs.tar.gz"
+          ls
+          exit 1
+        fi
+        echo "ROOTFS_PATH=$PWD/$ROOTFS" >> $GITHUB_ENV
+        echo "ROOTFS_NAME=$ROOTFS" >> $GITHUB_ENV
+        echo "status=success" >> ${GITHUB_OUTPUT}
+
+    # ========== 阶段2：用 ophub 脚本打包成 M302A 可启动镜像 ==========
+    - name: 克隆 ophub 打包脚本
+      if: steps.pick_rootfs.outputs.status == 'success'
+      working-directory: ${{ env.WORKDIR_PATH }}/workdir
+      run: |
+        git clone --depth=1 $OPUB_REPO_URL ophub
+        ls ophub/
+
+    - name: 调用 ophub 打包为 Amlogic 镜像
+      if: steps.pick_rootfs.outputs.status == 'success'
+      working-directory: ${{ env.WORKDIR_PATH }}/workdir/ophub
+      env:
+        OPENWRT_ARMVIRT_PATH: ${{ env.ROOTFS_PATH }}
+        AMLOGIC_SOC: ${{ env.SOC }}
+        AMLOGIC_MODEL: ${{ env.BOX }}
+        KERNEL_VERSION_NAME: ${{ env.KERNEL_VERSION }}
+        KERNEL_AUTO_LATEST: 'true'
+        PACKAGE_SOC: ${{ env.SOC }}
+        SELECT_PACKAGE_STEM: '_M302A'
+      run: |
+        echo "==> 使用 ophub 脚本打包 ${AMLOGIC_SOC} / ${AMLOGIC_MODEL} 镜像..."
+        ls -la make/
+        echo "==> rootfs: $OPENWRT_ARMVIRT_PATH"
+        ls -lh "$OPENWRT_ARMVIRT_PATH"
+        # ophub 打包入口
+        chmod +x make/*.sh
+        if [ -f make/openwrt ]; then
+          sudo -E PATH=$PATH bash make/openwrt
+        elif [ -f make/make ]; then
+          sudo -E PATH=$PATH bash make/make
+        else
+          ls make/
+          echo "::warning::未找到标准 ophub 入口，列出目录尝试其他方式"
+          find . -maxdepth 2 -name "*.sh" -executable | head
+        fi
+        # ophub 输出目录
+        echo "==> 输出目录："
+        ls -la out/ 2>/dev/null || echo "no out dir"
+        ls -la openwrt/out/ 2>/dev/null || echo "no openwrt/out dir"
+
+    - name: 收集最终固件
+      id: collect
+      if: steps.compile.outputs.status == 'success' && !cancelled()
+      run: |
+        mkdir -p ${GITHUB_WORKSPACE}/firmware_out
+        # 优先 ophub 打包后的镜像
+        if [ -d ${{ env.WORKDIR_PATH }}/workdir/ophub/out ]; then
+          cp -rf ${{ env.WORKDIR_PATH }}/workdir/ophub/out/* ${GITHUB_WORKSPACE}/firmware_out/ 2>/dev/null || true
+        fi
+        if [ -d ${{ env.WORKDIR_PATH }}/workdir/ophub/openwrt/out ]; then
+          cp -rf ${{ env.WORKDIR_PATH }}/workdir/ophub/openwrt/out/* ${GITHUB_WORKSPACE}/firmware_out/ 2>/dev/null || true
+        fi
+        # 兜底：如果 ophub 打包脚本因环境差异未产出，把原始 rootfs 也保存出来，
+        # 可配合 ophub 本地脚本 make -d s905l3b 二次打包。
+        cp -f ${{ env.ROOTFS_PATH }} ${GITHUB_WORKSPACE}/firmware_out/ 2>/dev/null || true
+        echo "==> firmware_out 内容："
+        ls -la ${GITHUB_WORKSPACE}/firmware_out/
+        echo "FIRMWARE_DIR=${GITHUB_WORKSPACE}/firmware_out" >> $GITHUB_ENV
+        echo "status=success" >> ${GITHUB_OUTPUT}
+
+    - name: 上传 bin 文件夹
+      uses: actions/upload-artifact@main
+      if: steps.compile.outputs.status == 'success' && env.UPLOAD_BIN_DIR == 'true'
+      with:
+        name: Amlogic_bin${{ env.FILE_DATE }}
+        path: openwrt/bin
+
+    - name: 上传固件目录
+      uses: actions/upload-artifact@main
+      if: steps.collect.outputs.status == 'success' && !cancelled()
+      with:
+        name: Amlogic_M302A_firmware${{ env.FILE_DATE }}
+        path: ${{ env.FIRMWARE_DIR }}
+
+    - name: 生成发布标签
+      id: tag
+      if: steps.compile.outputs.status == 'success' && env.UPLOAD_RELEASE == 'true' && !cancelled()
+      run: |
+        echo "release_tag=$(date +"%Y.%m.%d-%H.%M")-amlogic-m302a" >> ${GITHUB_OUTPUT}
+        cat > release.txt <<EOF
+        🖥️ Device: 魔百和 M302A (Amlogic S905L3B)
+
+        🔀 Branch: istoreos-25.12 (armsr/armv8 + ophub ${{ env.KERNEL_VERSION }} kernel)
+
+        📂 OpenWrt Source: ${{ env.REPO_URL }}
+
+        📦 Pack Script: ophub/amlogic-s9xxx-openwrt
+
+        🕒 Compile Time: $(date +"%Y年%m月%d日%H时%M分")
+
+        📝 刷机说明：
+          1) 用 Rufus/balenaEtcher 把 .img.gz 写入 U 盘（不要解压）；
+          2) 盒子插上 U 盘，通过短接/牙签/ADB 让盒子从 U 盘启动；
+          3) U 盘启动成功后，终端执行 install-to-emmc.sh 写入 eMMC；
+          4) 拔掉 U 盘重启，即进入 iStoreOS。
+        EOF
+        echo "status=success" >> ${GITHUB_OUTPUT}
+
+    - name: 自动发布固件到 Releases
+      uses: softprops/action-gh-release@v2.2.1
+      if: steps.tag.outputs.status == 'success' && !cancelled()
+      with:
+        tag_name: ${{ steps.tag.outputs.release_tag }}
+        body_path: release.txt
+        files: |
+          ${{ env.FIRMWARE_DIR }}/*.img.gz
+          ${{ env.FIRMWARE_DIR }}/*.tar.gz
+
+    - name: 删除运行记录
+      uses: Mattraks/delete-workflow-runs@main
+      with:
+        retain_days: 1
+        keep_minimum_runs: 1
+        token: ${{ env.GITHUB_TOKEN }}
+
+    - name: 删除自动发布的旧固件
+      uses: dev-drprasad/delete-older-releases@master
+      if: env.UPLOAD_RELEASE == 'true' && !cancelled()
+      with:
+        keep_latest: 10
+        delete_tags: true
