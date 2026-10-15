@@ -1,0 +1,252 @@
+name: ImageBuilder 快速打包 RK3566/RK3568
+
+on:
+  workflow_dispatch:
+    inputs:
+      istoreos_version:
+        description: 'iStoreOS版本号（LATEST=自动获取最新，或填具体版本）'
+        required: true
+        default: 'LATEST'
+      kernel_branch:
+        description: '内核分支'
+        required: true
+        default: '6.12'
+        type: choice
+        options:
+          - '6.12'
+          - '6.6'
+          - '6.1'
+      devices:
+        description: '要打包的设备（逗号分隔，默认全选）'
+        required: true
+        default: 'panther_panther-x2,nsy_g68-plus,r68p_r68p,firefly_station-m2'
+      extra_packages:
+        description: '额外预装软件包（空格分隔，可留空）'
+        required: false
+        default: ''
+      add_files:
+        description: '是否包含仓库内自定义files目录'
+        required: false
+        default: true
+        type: boolean
+  release:
+    types: [published]
+
+env:
+  TARGET: rockchip
+  SUBTARGET: armv8
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  imagebuilder:
+    runs-on: ubuntu-24.04
+    name: ImageBuilder 快速构建
+
+    steps:
+    - name: 释放磁盘空间
+      uses: sbwml/actions@free-disk
+
+    - name: 检出仓库
+      uses: actions/checkout@main
+
+    - name: 检查环境
+      run: |
+        echo "===== 系统信息 ====="
+        lsb_release -a 2>/dev/null
+        uname -a
+        df -hT /
+        echo ""
+        echo "===== 打包参数 ====="
+        echo "iStoreOS版本: ${{ inputs.istoreos_version || 'LATEST' }}"
+        echo "内核分支: ${{ inputs.kernel_branch || '6.12' }}"
+        echo "目标设备: ${{ inputs.devices || 'panther_panther-x2,nsy_g68-plus,r68p_r68p,firefly_station-m2' }}"
+        echo "额外包: '${{ inputs.extra_packages }}'"
+
+    - name: 安装依赖
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        sudo rm -rf /etc/apt/sources.list.d
+        sudo bash -c "curl -skL https://raw.githubusercontent.com/sbwml/actions/openwrt-build-setup/sources-24.04.list > /etc/apt/sources.list"
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential clang flex bison g++ gawk gcc-multilib g++-multilib \
+          gettext git libncurses5-dev libssl-dev python3 python3-distutils \
+          python3-setuptools rsync unzip zlib1g-dev file wget \
+          xsltproc libelf-dev device-tree-compiler pigz zstd
+        sudo apt-get clean
+
+    - name: 下载 ImageBuilder
+      id: download
+      run: |
+        set -e
+        mkdir -p workdir
+        cd workdir
+        REPO_ROOT="${GITHUB_WORKSPACE}"
+        TARGET="${{ env.TARGET }}"
+        SUBTARGET="${{ env.SUBTARGET }}"
+        VERSION="${{ inputs.istoreos_version || 'LATEST' }}"
+
+        # 多源兜底，自动解析LATEST
+        BASE_URL=""
+        RESOLVED_VER="$VERSION"
+        if [ "$VERSION" = "LATEST" ]; then
+          for mirror in \
+            "https://fw0.koolcenter.com/iStoreOS/${TARGET}" \
+            "https://fw1.koolcenter.com/iStoreOS/${TARGET}"; do
+            echo "尝试镜像源: $mirror"
+            if LATEST_VER=$(curl -sL --connect-timeout 8 "${mirror}/LATEST"); then
+              if [ -n "$LATEST_VER" ]; then
+                RESOLVED_VER="$LATEST_VER"
+                BASE_URL="$mirror"
+                echo "解析到最新版本: $RESOLVED_VER"
+                break
+              fi
+            fi
+          done
+          [ -z "$BASE_URL" ] && BASE_URL="https://fw0.koolcenter.com/iStoreOS/${TARGET}"
+        else
+          BASE_URL="https://fw0.koolcenter.com/iStoreOS/${TARGET}"
+        fi
+
+        IB_NAME="istoreos-imagebuilder-${TARGET}-${SUBTARGET}.${RESOLVED_VER}.tar.xz"
+        IB_URL="${BASE_URL}/${IB_NAME}"
+        echo "下载地址: $IB_URL"
+
+        if ! curl -fL --connect-timeout 20 --retry 3 -o "$IB_NAME" "$IB_URL"; then
+          echo "版本号命名文件找不到，尝试 LATEST 别名..."
+          IB_URL="${BASE_URL}/istoreos-imagebuilder-${TARGET}-${SUBTARGET}.LATEST.tar.xz"
+          curl -fL --connect-timeout 20 --retry 3 -o "$IB_NAME" "$IB_URL"
+        fi
+
+        ls -lh "$IB_NAME"
+        echo "resolved_version=$RESOLVED_VER" >> $GITHUB_OUTPUT
+        echo "workdir=$PWD" >> $GITHUB_OUTPUT
+
+    - name: 解压 ImageBuilder
+      id: extract
+      run: |
+        cd ${{ steps.download.outputs.workdir }}
+        tar xf istoreos-imagebuilder-*.tar.xz
+        IB_DIR=$(ls -d istoreos-*/ | head -1)
+        mv "$IB_DIR" imagebuilder
+        echo "ibdir=${{ steps.download.outputs.workdir }}/imagebuilder" >> $GITHUB_OUTPUT
+        echo "解压完成，ImageBuilder目录："
+        ls -la "${{ steps.download.outputs.workdir }}/imagebuilder/" | head -20
+
+    - name: 注入自定义设备（DTS+设备定义+网卡配置）
+      run: |
+        chmod +x ${GITHUB_WORKSPACE}/scripts-imagebuilder/inject_devices.sh
+        ${GITHUB_WORKSPACE}/scripts-imagebuilder/inject_devices.sh \
+          "${{ steps.extract.outputs.ibdir }}" \
+          "${GITHUB_WORKSPACE}"
+
+    - name: 构建固件（逐设备打包）
+      id: build
+      run: |
+        set +e
+        IB_DIR="${{ steps.extract.outputs.ibdir }}"
+        cd "$IB_DIR"
+
+        DEVICES_STR="${{ inputs.devices || 'panther_panther-x2,nsy_g68-plus,r68p_r68p,firefly_station-m2' }}"
+        EXTRA_PKGS="${{ inputs.extra_packages }}"
+
+        # 基础预装软件包（与完整编译版本一致）
+        BASE_PKGS="luci luci-i18n-base-zh-cn iStore luci-compat \
+                   wget-ssl curl ca-bundle ca-certificates openssh-sftp-server \
+                   block-mount kmod-fs-ext4 kmod-fs-vfat kmod-fs-exfat dosfstools e2fsprogs \
+                   kmod-usb-storage kmod-usb2 kmod-usb3 usbutils \
+                   kmod-tun kmod-ipt-nat6 kmod-nf-nat6 6in4 \
+                   kmod-nvme kmod-scsi-core parted \
+                   kmod-mt7915e kmod-mt7916-firmware kmod-r8125 \
+                   kmod-switch-rtl8367s kmod-dsa-rtl8365mb \
+                   kmod-usb-net-rtl8152 kmod-usb-net-rndis kmod-usb-net-cdc-ether"
+
+        # OAF 应用过滤（若 feeds 不存在 make 会自动跳过）
+        OAF_PKGS="luci-app-oaf luci-i18n-oaf-zh-cn appfilter"
+
+        OUTDIR="${GITHUB_WORKSPACE}/firmware_output"
+        mkdir -p "$OUTDIR"
+
+        IFS=',' read -ra DEVICES <<< "$DEVICES_STR"
+        SUCCESS=0
+        FAIL=0
+
+        for DEV in "${DEVICES[@]}"; do
+          DEV=$(echo "$DEV" | xargs)
+          [ -z "$DEV" ] && continue
+
+          echo ""
+          echo "========================================"
+          echo "开始打包设备: $DEV"
+          echo "========================================"
+
+          make clean >/dev/null 2>&1 || true
+
+          if make image PROFILE="$DEV" \
+               PACKAGES="$BASE_PKGS $OAF_PKGS $EXTRA_PKGS" \
+               FILES="files" \
+               BIN_DIR="$OUTDIR/$DEV" \
+               -j$(nproc); then
+            echo "✅ $DEV 打包成功"
+            SUCCESS=$((SUCCESS+1))
+          else
+            echo "⚠️  $DEV 多线程构建失败，单线程重试..."
+            if make image PROFILE="$DEV" \
+                 PACKAGES="$BASE_PKGS $OAF_PKGS $EXTRA_PKGS" \
+                 FILES="files" \
+                 BIN_DIR="$OUTDIR/$DEV" \
+                 -j1 V=s; then
+              echo "✅ $DEV 单线程打包成功"
+              SUCCESS=$((SUCCESS+1))
+            else
+              echo "❌ $DEV 打包失败"
+              FAIL=$((FAIL+1))
+            fi
+          fi
+
+          echo "产物列表:"
+          ls -lh "$OUTDIR/$DEV/" 2>/dev/null | grep -E "sysupgrade|img.gz|bin" || true
+        done
+
+        echo ""
+        echo "========================================"
+        echo "打包完成：成功 $SUCCESS 个，失败 $FAIL 个"
+        echo "========================================"
+
+        # 清理 packages 目录
+        find "$OUTDIR" -type d -name packages -exec rm -rf {} + 2>/dev/null || true
+        du -sh "$OUTDIR"
+
+        echo "FILE_DATE=_$(date +"%Y%m%d%H%M")" >> $GITHUB_ENV
+        if [ $SUCCESS -gt 0 ]; then
+          echo "status=success" >> $GITHUB_OUTPUT
+        else
+          echo "status=failed" >> $GITHUB_OUTPUT
+          exit 1
+        fi
+
+    - name: 产物清单
+      if: steps.build.outputs.status == 'success' && !cancelled()
+      run: |
+        OUTDIR="${GITHUB_WORKSPACE}/firmware_output"
+        echo "====== 最终固件文件列表 ======"
+        find "$OUTDIR" -type f \( -name "*.img.gz" -o -name "*.img" -o -name "*.bin" \) | sort
+        echo "==============================="
+        echo "FIRMWARE_ROOT=$OUTDIR" >> $GITHUB_ENV
+
+    - name: 上传到 Artifacts
+      uses: actions/upload-artifact@main
+      if: steps.build.outputs.status == 'success' && !cancelled()
+      with:
+        name: ImageBuilder_Firmware${{ env.FILE_DATE }}
+        path: ${{ env.FIRMWARE_ROOT }}
+        retention-days: 30
+
+    - name: 清理工作流记录
+      uses: Mattraks/delete-workflow-runs@main
+      if: always()
+      with:
+        retain_days: 7
+        keep_minimum_runs: 5
+        token: ${{ env.GITHUB_TOKEN }}
