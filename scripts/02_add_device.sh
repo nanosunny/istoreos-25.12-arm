@@ -49,14 +49,29 @@ $(call Device/Legacy/rk3568,$(1))
   DEVICE_PACKAGES += kmod-dsa-rtl8365mb kmod-nvme kmod-scsi-core kmod-mt7915e kmod-mt7916-firmware
 endef
 TARGET_DEVICES += nsy_g68-plus
+
+define Device/r68p_r68p
+\$(call Device/Legacy/rk3568,\$(1))
+  DEVICE_VENDOR := R68P
+  DEVICE_MODEL := R68P RK3568 Box
+  DEVICE_DTS := rk3568/rk3568-r68p
+  SUPPORTED_DEVICES += r68p,rk3568 radxa,rock-3a
+  DEVICE_PACKAGES :=
+endef
+TARGET_DEVICES += r68p_r68p
 EOT
 
 # 复制dts到target/linux/rockchip/dts/rk3568
 cp -f $GITHUB_WORKSPACE/configfiles/dts/rk3568/rk3566-panther-x2.dts target/linux/rockchip/dts/rk3568/
 cp -f $GITHUB_WORKSPACE/configfiles/dts/rk3568/rk3568-nsy-g68-plus.dts target/linux/rockchip/dts/rk3568/
+cp -f $GITHUB_WORKSPACE/configfiles/dts/rk3568/rk3568-r68p.dts target/linux/rockchip/dts/rk3568/
 
 # 网口：G68-PLUS 的 RTL8367S 交换机走 DSA，lan1~lan4 + wan
 sed -i '0,/^\tcase "$board" in$/s//&\n\tnsy,g68-plus)\n\t\tucidef_set_interfaces_lan_wan "lan1 lan2 lan3 lan4" "wan"\n\t\t;;/' \
+  target/linux/rockchip/armv8/base-files/etc/board.d/02_network
+
+# 网口：R68P 是双口 RK3568 盒子，eth0(靠近电源口)=LAN, eth1=WAN，基于 DTS 别名固定枚举顺序
+sed -i '0,/^\tcase "$board" in$/s//&\n\tr68p,rk3568)\n\t\tucidef_set_interfaces_lan_wan "eth0" "eth1"\n\t\t;;/' \
   target/linux/rockchip/armv8/base-files/etc/board.d/02_network
 
 # G68-PLUS：MT7916 无线（开源 mt76，板载 efuse 为空时读取默认 eeprom）+ RTL8367S 网口灯
