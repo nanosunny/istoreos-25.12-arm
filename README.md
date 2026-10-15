@@ -24,6 +24,8 @@
 > [!TIP]
 > 📢本项目提供了一个 **将第三方 rockchip 设备适配至 iStoreOS 官方源码** 的参考实现，支持通过源码编译生成 **`sysupgrade`** 格式固件。该格式可手动在线刷写升级， **一次适配，持续更新** ，告别重复刷机
 > 
+> 😂如果您在适配其他 RK 机型时遇到困难，欢迎您直接使用右侧项目😂👉👉👉[iStoreOS-Actions](https://github.com/Kwonelee/iStoreOS-Actions)
+> 
 > 当前默认编译 **iStoreOS 25.12（内核 6.12）**，如需旧版可将 `.github/workflows/build-istoreos-6.x.yml` 中的 `REPO_BRANCH` 改回 `istoreos-24.10`
 > 
 > 使用此仓库必须设置机密token，Actions云编译固件时需要用到，通常在仓库设置里面。机密键名为 **`GH_TOKEN`**（严禁在仓库可视代码中填写，否则后果自负）
@@ -53,7 +55,7 @@
 |-------------|:---------:| ----------------------------------------------------------------------- |:----------------------------:|
 | panther-x2  |    ✅    | istoreos-rockchip-armv8-panther_panther-x2-squashfs-sysupgrade.img.gz   | 🟢 已测试（Rockchip RK3566）     |
 | g68-plus    |    ✅    | istoreos-rockchip-armv8-nsy_g68-plus-squashfs-sysupgrade.img.gz         | 🟡 未测试（Rockchip RK3568，4LAN+1WAN交换芯片+MT7916 WiFi）     |
-| **R68P**    |    ✅    | istoreos-rockchip-armv8-r68p_r68p-squashfs-sysupgrade.img.gz            | 🟡 单网口配置（Rockchip RK3568，可USB网卡扩展WAN做单臂路由） |
+| **R68P**    |    ✅    | istoreos-rockchip-armv8-r68p_r68p-squashfs-sysupgrade.img.gz            | 🟢 单网口配置（Rockchip RK3568，可USB网卡扩展WAN做单臂路由） |
 | 魔百和 M302A|    ✅    | istoreos-s905l3b-m302a-*.img.gz                                          | 🟡 新增（Amlogic S905L3B，需U盘启动） |
 | 其他        |    ⏳    |                                                                          |                              |
 
@@ -129,3 +131,31 @@ M302A（S905L3B）是晶晨平台运营商电视盒子，与 panther-x2 / g68-pl
 <a href="#readme">
 <img src="https://img.shields.io/badge/-返回顶部-FFFFFF.svg" title="返回顶部" align="right"/>
 </a>
+
+---
+
+## 🚀 ImageBuilder 快速打包（推荐日常使用）
+
+除了完整源码编译（`Build iStore OS 6.x`，耗时约2-3小时），项目提供了 **ImageBuilder 快速打包工作流**，**5-15分钟**即可出固件，适合调整软件包/配置后快速出包。
+
+### 使用方法
+1. Actions → **`ImageBuilder 快速打包 RK3566/RK3568`** → `Run workflow`
+2. 可选参数：
+   - **iStoreOS版本**：默认`LATEST`自动取最新版，也可填具体版本号（如`25.12.5-2026092410`）
+   - **内核分支**：可选6.12/6.6/6.1
+   - **目标设备**：逗号分隔，默认打包全部4款设备
+   - **额外软件包**：空格分隔的包名，会额外预装到固件中
+   - **自定义files**：若仓库根目录有`files/`，会自动注入固件
+
+### 支持设备
+| 设备代号 | 说明 | 默认网络 |
+|---------|------|---------|
+| `panther_panther-x2` | 黑豹Panther-X2 RK3566 | LAN=eth0, WAN=eth1 |
+| `nsy_g68-plus` | NSY G68-Plus RK3568（4+1口+MT7916 WiFi） | LAN1-4+WAN |
+| `r68p_r68p` | R68P RK3568 单网口（适配魔百和等单口盒子） | 单口LAN 192.168.100.1 |
+| `firefly_station-m2` | Firefly Station-M2（官方上游支持） | 官方默认 |
+
+### 注意事项
+- ImageBuilder 使用官方预编译内核，**不会重新编译内核**，适合快速出包；如需修改内核配置/打内核补丁，请使用完整编译工作流。
+- 自动预装：LuCI中文、iStore商店、OAF应用过滤、USB/SSD/NVMe挂载、Docker依赖、常用驱动（R8125/RTL8367S/USB网卡/MT7916 WiFi）。
+- 产物为sysupgrade格式，可以直接在Web界面「系统→备份/升级」上传升级，不需要重新写盘。
