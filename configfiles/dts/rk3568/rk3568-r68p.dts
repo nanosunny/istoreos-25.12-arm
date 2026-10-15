@@ -2,6 +2,7 @@
 /*
  * Copyright (c) 2025 R68P Community
  * Based on rk3568-rock-3a.dts
+ * 单网口版本：仅保留GMAC0，GMAC1硬件未引出直接禁用
  */
 
 /dts-v1/;
@@ -9,15 +10,14 @@
 #include "rk3568-rock-3a.dts"
 
 / {
-	model = "R68P RK3568 Box";
+	model = "R68P RK3568 Box (Single NIC)";
 	compatible = "r68p,rk3568", "rockchip,rk3568";
 
 	aliases {
 		mmc0 = &sdmmc0;
 		mmc1 = &sdhci;
 		mmc2 = &sdmmc1;
-		ethernet0 = &gmac0;   /* 靠近电源口 -> eth0 = LAN */
-		ethernet1 = &gmac1;   /* 另一个网口 -> eth1 = WAN */
+		ethernet0 = &gmac0;   /* 唯一板载网口 -> eth0 = 默认LAN */
 	};
 
 	chosen {
@@ -56,33 +56,9 @@
 	};
 };
 
+/* 板载仅引出单网口，禁用GMAC1避免枚举出现"幽灵网口" */
 &gmac1 {
-	status = "okay";
-	phy-handle = <&rtl8211f_phy1>;
-	phy-mode = "rgmii";
-	clock_in_out = "output";
-	tx_delay = <0x2a>;
-	rx_delay = <0x1a>;
-	pinctrl-names = "default";
-	pinctrl-0 = <&rgmii2_pins &mdio2_pins>;
-
-	snps,reset-gpio = <&gpio3 RK_PB7 GPIO_ACTIVE_LOW>;
-	snps,reset-active-low;
-	snps,reset-delays-us = <0 20000 100000>;
-
-	mdio {
-		compatible = "snps,dwmac-mdio";
-		#address-cells = <1>;
-		#size-cells = <0>;
-
-		rtl8211f_phy1: ethernet-phy@1 {
-			compatible = "ethernet-phy-ieee802.3-c22";
-			reg = <1>;
-			reset-assert-us = <10000>;
-			reset-deassert-us = <50000>;
-			reset-gpios = <&gpio3 RK_PB7 GPIO_ACTIVE_LOW>;
-		};
-	};
+	status = "disabled";
 };
 
 /* SD 卡（启动介质） */
@@ -112,7 +88,7 @@
 	status = "okay";
 };
 
-/* USB 3.0 */
+/* USB 3.0（可外接USB网卡扩展WAN口做单臂路由） */
 &usb2phy0 {
 	status = "okay";
 };
