@@ -1,0 +1,131 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright (c) 2025 R68P Community
+ * Based on rk3568-rock-3a.dts
+ */
+
+/dts-v1/;
+#include <dt-bindings/leds/common.h>
+#include "rk3568-rock-3a.dts"
+
+/ {
+	model = "R68P RK3568 Box";
+	compatible = "r68p,rk3568", "rockchip,rk3568";
+
+	aliases {
+		mmc0 = &sdmmc0;
+		mmc1 = &sdhci;
+		mmc2 = &sdmmc1;
+		ethernet0 = &gmac0;   /* 靠近电源口 -> eth0 = LAN */
+		ethernet1 = &gmac1;   /* 另一个网口 -> eth1 = WAN */
+	};
+
+	chosen {
+		stdout-path = &uart2;
+	};
+};
+
+&gmac0 {
+	status = "okay";
+	phy-handle = <&rtl8211f_phy0>;
+	phy-mode = "rgmii";
+	clock_in_out = "input";
+	tx_delay = <0x3c>;
+	rx_delay = <0x2f>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&rgmii1_pins &mdio1_pins>;
+
+	snps,reset-gpio = <&gpio3 RK_PB0 GPIO_ACTIVE_LOW>;
+	snps,reset-active-low;
+	snps,reset-delays-us = <0 20000 100000>;
+
+	mdio {
+		compatible = "snps,dwmac-mdio";
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		rtl8211f_phy0: ethernet-phy@0 {
+			compatible = "ethernet-phy-ieee802.3-c22";
+			reg = <0>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&eth_phy0_rst>;
+			reset-assert-us = <10000>;
+			reset-deassert-us = <50000>;
+			reset-gpios = <&gpio3 RK_PB0 GPIO_ACTIVE_LOW>;
+		};
+	};
+};
+
+&gmac1 {
+	status = "okay";
+	phy-handle = <&rtl8211f_phy1>;
+	phy-mode = "rgmii";
+	clock_in_out = "output";
+	tx_delay = <0x2a>;
+	rx_delay = <0x1a>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&rgmii2_pins &mdio2_pins>;
+
+	snps,reset-gpio = <&gpio3 RK_PB7 GPIO_ACTIVE_LOW>;
+	snps,reset-active-low;
+	snps,reset-delays-us = <0 20000 100000>;
+
+	mdio {
+		compatible = "snps,dwmac-mdio";
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		rtl8211f_phy1: ethernet-phy@1 {
+			compatible = "ethernet-phy-ieee802.3-c22";
+			reg = <1>;
+			reset-assert-us = <10000>;
+			reset-deassert-us = <50000>;
+			reset-gpios = <&gpio3 RK_PB7 GPIO_ACTIVE_LOW>;
+		};
+	};
+};
+
+/* SD 卡（启动介质） */
+&sdmmc0 {
+	bus-width = <4>;
+	cap-sd-highspeed;
+	disable-wp;
+	max-frequency = <150000000>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&sdmmc0_bus4 &sdmmc0_clk &sdmmc0_cmd &sdmmc0_det>;
+	sd-uhs-sdr104;
+	vmmc-supply = <&vcc3v3_sd>;
+	vqmmc-supply = <&vcc_sdio>;
+	status = "okay";
+};
+
+/* eMMC */
+&sdhci {
+	bus-width = <8>;
+	max-frequency = <200000000>;
+	mmc-hs200-1_8v;
+	non-removable;
+	pinctrl-names = "default";
+	pinctrl-0 = <&emmc_bus8 &emmc_clk &emmc_cmd &emmc_datastrobe>;
+	vmmc-supply = <&vcc3v3_sys>;
+	vqmmc-supply = <&vcc_1v8>;
+	status = "okay";
+};
+
+/* USB 3.0 */
+&usb2phy0 {
+	status = "okay";
+};
+&usb2phy1 {
+	status = "okay";
+};
+&usb3phy {
+	status = "okay";
+};
+&usbdrd_dwc3 {
+	status = "okay";
+};
+&usbhost_dwc3 {
+	dr_mode = "host";
+	status = "okay";
+};
