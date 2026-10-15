@@ -94,7 +94,7 @@ jobs:
         if [ "$VERSION" = "LATEST" ]; then
           for mirror in \
             "https://downloads.istoreos.com/${TARGET}" \
-            "https://fw1.koolcenter.com/iStoreOS/${TARGET}"; do
+            "https://fw.koolcenter.com/iStoreOS/${TARGET}"; do
             echo "尝试镜像源: $mirror"
             if LATEST_VER=$(curl -sL --connect-timeout 8 "${mirror}/LATEST"); then
               if [ -n "$LATEST_VER" ]; then
