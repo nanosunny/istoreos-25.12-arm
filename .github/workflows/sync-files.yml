@@ -20,8 +20,23 @@ jobs:
         wget --no-check-certificate --no-cache -O ./armv8/.config https://fw0.koolcenter.com/iStoreOS/easepi-r1/config.buildinfo
 
         FILE_PATH="./armv8/.config"
+        DATA_FILE="${GITHUB_WORKSPACE}/configfiles/config_data-6.x.txt"
+        # 保护：仓库里若缺少该配置文件，自动补一份内置默认内容，避免 Sync Files 因 cat 报错直接中断
+        if [ ! -f "$DATA_FILE" ]; then
+           echo "::warning::缺少 configfiles/config_data-6.x.txt，已自动写入内置默认内容"
+           mkdir -p "$(dirname "$DATA_FILE")"
+           {
+             echo 'CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_panther_panther-x2=y'
+             echo 'CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_nsy_g68-plus=y'
+             echo 'CONFIG_PACKAGE_kmod-dsa-rtl8365mb=y'
+             echo 'CONFIG_PACKAGE_kmod-mt7915e=y'
+             echo 'CONFIG_PACKAGE_kmod-mt7916-firmware=y'
+           } > "$DATA_FILE"
+           echo "[Sync] 已生成 $DATA_FILE"
+        fi
+
         if [ -f "$FILE_PATH" ] && [ -s "$FILE_PATH" ]; then
-           content=$(cat ${GITHUB_WORKSPACE}/configfiles/config_data-6.x.txt)
+           content=$(cat "$DATA_FILE")
            configdata=$(echo "$content" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
            # ------------只禁用不需要的官方设备，插件保持与官方 iStoreOS 一致------------
            sed -i 's/^CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_cyber_cyber3588-aib=y/# CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_cyber_cyber3588-aib is not set/' ./armv8/.config
