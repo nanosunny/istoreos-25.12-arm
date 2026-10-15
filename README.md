@@ -24,6 +24,8 @@
 > [!TIP]
 > 📢本项目提供了一个 **将第三方 rockchip 设备适配至 iStoreOS 官方源码** 的参考实现，支持通过源码编译生成 **`sysupgrade`** 格式固件。该格式可手动在线刷写升级， **一次适配，持续更新** ，告别重复刷机
 > 
+> 😂如果您在适配其他 RK 机型时遇到困难，欢迎您直接使用右侧项目😂👉👉👉[iStoreOS-Actions](https://github.com/Kwonelee/iStoreOS-Actions)
+> 
 > 当前默认编译 **iStoreOS 25.12（内核 6.12）**，如需旧版可将 `.github/workflows/build-istoreos-6.x.yml` 中的 `REPO_BRANCH` 改回 `istoreos-24.10`
 > 
 > 使用此仓库必须设置机密token，Actions云编译固件时需要用到，通常在仓库设置里面。机密键名为 **`GH_TOKEN`**（严禁在仓库可视代码中填写，否则后果自负）
@@ -46,11 +48,31 @@
 ## 😊 支持设备 [![](https://img.shields.io/badge/-支持设备-FFFFFF.svg)](#-支持设备-)
 | 设备         |  状态     |  包名                                                                  | 备注                        |
 |-------------|:---------:| ----------------------------------------------------------------------- |:----------------------------:|
-| panther-x2  |    ✅    | istoreos-rockchip-armv8-panther_panther-x2-squashfs-sysupgrade.img.gz   | 🟢 已测试                    |
-| g68-plus    |    ✅    | istoreos-rockchip-armv8-nsy_g68-plus-squashfs-sysupgrade.img.gz         | 🟡 未测试                    |
+| panther-x2  |    ✅    | istoreos-rockchip-armv8-panther_panther-x2-squashfs-sysupgrade.img.gz   | 🟢 已测试（Rockchip RK3566）     |
+| g68-plus    |    ✅    | istoreos-rockchip-armv8-nsy_g68-plus-squashfs-sysupgrade.img.gz         | 🟡 未测试（Rockchip RK3566）     |
+| 魔百和 M302A|    ✅    | istoreos-s905l3b-m302a-*.img.gz                                          | 🟡 新增（Amlogic S905L3B，需U盘启动） |
 | 其他        |    ⏳    |                                                                          |                              |
 
 ✅ 支持 - ⏳ 计划中 - ⭕ 不支持
+
+### 📺 Amlogic 魔百和 M302A 说明
+
+M302A（S905L3B）是晶晨平台运营商电视盒子，与 panther-x2 / g68-plus 的 Rockchip 平台走**不同的构建流水线**：
+
+- Rockchip 设备：执行 **`Build iStore OS 6.x`** 工作流，走 iStoreOS 官方 `rockchip/armv8` 源码；
+- 魔百和 M302A：执行 **`Build iStore OS for Amlogic (M302A)`** 工作流，编译 `armsr/armv8` 通用 rootfs，再用 [ophub/amlogic-s9xxx-openwrt](https://github.com/ophub/amlogic-s9xxx-openwrt) 脚本注入 flippy/unifreq 6.1.y 定制内核 + DTB + bootloader 打包。
+
+**刷机流程（M302A）：**
+1. 从 Actions / Releases 下载 `istoreos-s905l3b-m302a-*.img.gz`；
+2. 用 Rufus / balenaEtcher **直接写入 U 盘**（无需解压）；
+3. 将 U 盘插入 M302A 靠近网口的 USB 口，**短接 CPU 旁 4R19 电阻**（或 USB Burning Tool 写入降级 bootloader）从 U 盘启动；
+4. U 盘启动后，默认 DHCP 从主路由获取 IP，终端或 SSH 执行 `install-to-emmc.sh` 写入 eMMC；
+5. 拔掉 U 盘重启，即进入 iStoreOS。
+
+**注意：**
+- M302A 多数批次**百兆网口、无内置 WiFi**，如需 WiFi 请额外插 USB 网卡（已内置 mt7601u / rtl8188eu / rtl8812au 驱动）；
+- OAF（应用过滤）用户态界面已内置，`kmod-oaf` 内核模块**首次启动后**在 Web 界面「应用过滤」里点一下内核安装即可自动匹配 ophub 6.1.y 内核版本；
+- 魔百和因运营商定制批次多（ZN / BYT / CW 等代工），网卡/WiFi 可能略有差异，若启动后外设不工作可反馈具体代工信息进一步定制 DTB。
 
 ---
 
