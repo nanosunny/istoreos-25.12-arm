@@ -152,7 +152,6 @@ M302A（S905L3B）是晶晨平台运营商电视盒子，与 panther-x2 / g68-pl
 | `panther_panther-x2` | 黑豹Panther-X2 RK3566 | LAN=eth0, WAN=eth1 |
 | `nsy_g68-plus` | NSY G68-Plus RK3568（4+1口+MT7916 WiFi） | LAN1-4+WAN |
 | `r68p_r68p` | R68P RK3568 单网口（适配魔百和等单口盒子） | 单口LAN 192.168.100.1 |
-| `firefly_station-m2` | Firefly Station-M2（官方上游支持） | 官方默认 |
 
 ### 注意事项
 - ImageBuilder 使用官方预编译内核，**不会重新编译内核**，适合快速出包；如需修改内核配置/打内核补丁，请使用完整编译工作流。
