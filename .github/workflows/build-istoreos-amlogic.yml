@@ -5,11 +5,11 @@ on:
   workflow_dispatch:
     inputs:
       kernel_version:
-        description: 'ophub/flippy 内核版本（默认 6.1.y）'
+        description: 'ophub/unifreq 内核版本（默认 6.12.y，可选 6.6.y / 6.1.y）'
         required: false
-        default: '6.1.y'
+        default: '6.12.y'
       soc:
-        description: 'SoC 型号（s905l3b）'
+        description: 'ophub 板型标识（M302A/M304A 对应 s905l3b）'
         required: false
         default: 's905l3b'
       box:
@@ -23,7 +23,7 @@ env:
   CONFIG_FILE: .config
   DIY_SH: scripts-amlogic/00_prepare_amlogic.sh
   OPUB_REPO_URL: https://github.com/ophub/amlogic-s9xxx-openwrt.git
-  KERNEL_VERSION: ${{ github.event.inputs.kernel_version || '6.1.y' }}
+  KERNEL_VERSION: ${{ github.event.inputs.kernel_version || '6.12.y' }}
   SOC: ${{ github.event.inputs.soc || 's905l3b' }}
   BOX: ${{ github.event.inputs.box || 'M302A/M304A' }}
   UPLOAD_BIN_DIR: true
@@ -66,7 +66,7 @@ jobs:
         sudo rm -rf /etc/apt/sources.list.d
         sudo bash -c "curl -skL https://raw.githubusercontent.com/sbwml/actions/openwrt-build-setup/sources-24.04.list > /etc/apt/sources.list"
         sudo apt-get update
-        sudo apt-get install -y build-essential flex bison cmake g++ gawk gcc-multilib g++-multilib gettext git gnutls-dev libfuse-dev libncurses5-dev libssl-dev python3 python3-pip python3-ply python3-pyelftools rsync unzip zlib1g-dev file wget subversion patch upx-ucl autoconf automake curl asciidoc binutils bzip2 lib32gcc-s1 libc6-dev-i386 uglifyjs msmtp texinfo libreadline-dev libglib2.0-dev xmlto libelf-dev libtool autopoint antlr3 gperf ccache swig coreutils haveged scons libpython3-dev rename qemu-utils jq p7zip p7zip-full btrfs-progs dosfstools e2fsprogs parted losetup uuid-runtime
+        sudo apt-get install -y build-essential flex bison cmake g++ gawk gcc-multilib g++-multilib gettext git gnutls-dev libfuse-dev libncurses5-dev libssl-dev python3 python3-pip python3-ply python3-pyelftools rsync unzip zlib1g-dev file wget subversion patch upx-ucl autoconf automake curl asciidoc binutils bzip2 lib32gcc-s1 libc6-dev-i386 uglifyjs msmtp texinfo libreadline-dev libglib2.0-dev xmlto libelf-dev libtool autopoint antlr3 gperf ccache swig coreutils haveged scons libpython3-dev rename qemu-utils jq p7zip p7zip-full btrfs-progs dosfstools e2fsprogs parted util-linux uuid-runtime
         sudo apt-get clean
 
     - name: 克隆 iStoreOS 源码
@@ -90,8 +90,14 @@ jobs:
         [ -e $FEEDS_CONF_PATH ] && mv $FEEDS_CONF_PATH openwrt/$FEEDS_CONF
         cd openwrt
         # 让自定义脚本里的相对路径 files/ 正确落到 openwrt/files
+        export GITHUB_REPO_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}"
         chmod +x $GITHUB_WORKSPACE/$DIY_SH
         $GITHUB_WORKSPACE/$DIY_SH
+        # 把 00_prepare_amlogic.sh 里写的 REPLACE_GITHUB_REPOSITORY 占位符替换成真实仓库地址
+        if [ -f files/etc/config/amlogic ]; then
+          sed -i "s|https://github.com/REPLACE_GITHUB_REPOSITORY|${GITHUB_REPO_URL}|g" files/etc/config/amlogic
+          echo "==> 晶晨宝盒固件下载地址已设置为: ${GITHUB_REPO_URL}"
+        fi
 
     - name: 更新 feeds
       run: |
@@ -153,37 +159,48 @@ jobs:
       run: |
         git clone --depth=1 $OPUB_REPO_URL ophub
         ls ophub/
+        echo "==> ophub 依赖清单（按宿主系统版本匹配）："
+        ls ophub/make-openwrt/scripts/ 2>/dev/null || true
+
+    - name: 安装 ophub 打包依赖
+      if: steps.pick_rootfs.outputs.status == 'success'
+      working-directory: ${{ env.WORKDIR_PATH }}/workdir/ophub
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        # ophub 官方用「依赖清单文件」声明打包所需的软件包，
+        # 按宿主 Ubuntu 版本号匹配（24.04 -> ubuntu2404-make-openwrt-depends）。
+        UBUNTU_VER="$(. /etc/os-release && echo "${VERSION_ID//./}")"
+        DEP_FILE="make-openwrt/scripts/ubuntu${UBUNTU_VER}-make-openwrt-depends"
+        if [ ! -f "${DEP_FILE}" ]; then
+          echo "::warning::未找到 ${DEP_FILE}，回退到较新的清单"
+          DEP_FILE="$(ls make-openwrt/scripts/ubuntu*-make-openwrt-depends 2>/dev/null | tail -1)"
+        fi
+        if [ -z "${DEP_FILE}" ] || [ ! -f "${DEP_FILE}" ]; then
+          echo "::error::未找到 ophub 打包依赖清单，无法继续"
+          exit 1
+        fi
+        echo "==> 使用依赖清单：${DEP_FILE}"
+        sudo apt-get update
+        sudo apt-get install -y $(cat "${DEP_FILE}")
+        sudo apt-get clean
 
     - name: 调用 ophub 打包为 Amlogic 镜像
       if: steps.pick_rootfs.outputs.status == 'success'
       working-directory: ${{ env.WORKDIR_PATH }}/workdir/ophub
-      env:
-        OPENWRT_ARMVIRT_PATH: ${{ env.ROOTFS_PATH }}
-        AMLOGIC_SOC: ${{ env.SOC }}
-        AMLOGIC_MODEL: ${{ env.BOX }}
-        KERNEL_VERSION_NAME: ${{ env.KERNEL_VERSION }}
-        KERNEL_AUTO_LATEST: 'true'
-        PACKAGE_SOC: ${{ env.SOC }}
-        SELECT_PACKAGE_STEM: '_M302A'
       run: |
-        echo "==> 使用 ophub 脚本打包 ${AMLOGIC_SOC} / ${AMLOGIC_MODEL} 镜像..."
-        ls -la make/
-        echo "==> rootfs: $OPENWRT_ARMVIRT_PATH"
-        ls -lh "$OPENWRT_ARMVIRT_PATH"
-        # ophub 打包入口
-        chmod +x make/*.sh
-        if [ -f make/openwrt ]; then
-          sudo -E PATH=$PATH bash make/openwrt
-        elif [ -f make/make ]; then
-          sudo -E PATH=$PATH bash make/make
-        else
-          ls make/
-          echo "::warning::未找到标准 ophub 入口，列出目录尝试其他方式"
-          find . -maxdepth 2 -name "*.sh" -executable | head
-        fi
-        # ophub 输出目录
-        echo "==> 输出目录："
-        ls -la out/ 2>/dev/null || echo "no out dir"
+        echo "==> 打包设备：${{ env.SOC }} ( ${{ env.BOX }} )，内核：${{ env.KERNEL_VERSION }}"
+        # ophub 约定：rootfs 放在 <repo>/openwrt-armsr/ 下，文件名匹配 *rootfs.tar.gz
+        mkdir -p openwrt-armsr
+        cp -f "${{ env.ROOTFS_PATH }}" openwrt-armsr/
+        ls -lh openwrt-armsr/
+        # ophub 官方入口：sudo ./remake -b <板型标识> -k <内核版本>
+        #   -b 取自 make-openwrt/openwrt-files/common-files/etc/model_database.conf，
+        #      M302A/M304A 所在行的板型标识为 s905l3b
+        #   -k 可用下划线传入多个内核版本；不传则由 remake 自动取该分支最新小版本
+        chmod +x remake
+        sudo -E ./remake -b "${{ env.SOC }}" -k "${{ env.KERNEL_VERSION }}"
+        echo "==> ophub 输出目录："
         ls -la openwrt/out/ 2>/dev/null || echo "no openwrt/out dir"
 
     - name: 收集最终固件
@@ -228,7 +245,7 @@ jobs:
         cat > release.txt <<EOF
         🖥️ Device: 魔百和 M302A (Amlogic S905L3B)
 
-        🔀 Branch: istoreos-25.12 (armsr/armv8 + ophub ${{ env.KERNEL_VERSION }} kernel)
+        🔀 Branch: istoreos-25.12 (armsr/armv8 + ophub/unifreq ${{ env.KERNEL_VERSION }} kernel)
 
         📂 OpenWrt Source: ${{ env.REPO_URL }}
 
