@@ -24,8 +24,6 @@
 > [!TIP]
 > 📢本项目提供了一个 **将第三方 rockchip 设备适配至 iStoreOS 官方源码** 的参考实现，支持通过源码编译生成 **`sysupgrade`** 格式固件。该格式可手动在线刷写升级， **一次适配，持续更新** ，告别重复刷机
 > 
-> 😂如果您在适配其他 RK 机型时遇到困难，欢迎您直接使用右侧项目😂👉👉👉[iStoreOS-Actions](https://github.com/Kwonelee/iStoreOS-Actions)
-> 
 > 当前默认编译 **iStoreOS 25.12（内核 6.12）**，如需旧版可将 `.github/workflows/build-istoreos-6.x.yml` 中的 `REPO_BRANCH` 改回 `istoreos-24.10`
 > 
 > 使用此仓库必须设置机密token，Actions云编译固件时需要用到，通常在仓库设置里面。机密键名为 **`GH_TOKEN`**（严禁在仓库可视代码中填写，否则后果自负）
@@ -55,7 +53,7 @@
 |-------------|:---------:| ----------------------------------------------------------------------- |:----------------------------:|
 | panther-x2  |    ✅    | istoreos-rockchip-armv8-panther_panther-x2-squashfs-sysupgrade.img.gz   | 🟢 已测试（Rockchip RK3566）     |
 | g68-plus    |    ✅    | istoreos-rockchip-armv8-nsy_g68-plus-squashfs-sysupgrade.img.gz         | 🟡 未测试（Rockchip RK3568，4LAN+1WAN交换芯片+MT7916 WiFi）     |
-| **R68P**    |    ✅    | istoreos-rockchip-armv8-r68p_r68p-squashfs-sysupgrade.img.gz            | 🟢 单网口配置（Rockchip RK3568，可USB网卡扩展WAN做单臂路由） |
+| **R68P**    |    ✅    | istoreos-rockchip-armv8-r68p_r68p-squashfs-sysupgrade.img.gz            | 🟡 单网口配置（Rockchip RK3568，可USB网卡扩展WAN做单臂路由） |
 | 魔百和 M302A|    ✅    | istoreos-s905l3b-m302a-*.img.gz                                          | 🟡 新增（Amlogic S905L3B，需U盘启动） |
 | 其他        |    ⏳    |                                                                          |                              |
 
