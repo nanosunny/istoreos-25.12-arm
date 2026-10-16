@@ -20,12 +20,12 @@ cp -a $GITHUB_WORKSPACE/configfiles/firmware/brcm/* package/base-files/files/lib
 rm -rf feeds/packages/lang/rust && git clone https://github.com/xiangfeidexiaohuo/extra-others && mv extra-others/rust feeds/packages/lang/
 
 # 移除要替换的包
-rm -rf feeds/packages/net/adguardhome
-rm -rf feeds/luci/applications/luci-app-adguardhome
-rm -rf feeds/third_party/luci-app-LingTiGameAcc
-rm -rf feeds/luci/luci-app-radicale3
-rm -rf feeds/luci/applications/luci-app-filebrowser
-rm -rf feeds/third_party/luci-app-zerotier
+#rm -rf feeds/packages/net/adguardhome
+#rm -rf feeds/luci/applications/luci-app-adguardhome
+#rm -rf feeds/third_party/luci-app-LingTiGameAcc
+#rm -rf feeds/luci/luci-app-radicale3
+#rm -rf feeds/luci/applications/luci-app-filebrowser
+#rm -rf feeds/third_party/luci-app-zerotier
 
 # ============================================================================================================
 # OpenAppFilter (OAF) 应用过滤 相关兼容处理
