@@ -130,10 +130,10 @@ jobs:
         find dl -size -1024c -exec ls -l {} \;
         find dl -size -1024c -exec rm -f {} \;
 
-    - name: 定位哪个Makefile第92行出错，打印隐藏字符
+    - name: 定位哪个Makefile第92行出错，打印隐藏字符# 查找所有mk文件，打印90~95行，带上隐藏字符
+      id: Check_again   
       run: |
         cd openwrt
-    # 查找所有mk文件，打印90~95行，带上隐藏字符
         echo "===== 检查 legacy.mk ====="
         echo "文件路径: target/linux/rockchip/image/legacy.mk"
         sed -n '90,95l' target/linux/rockchip/image/legacy.mk
