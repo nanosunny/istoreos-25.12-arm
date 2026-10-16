@@ -51,7 +51,7 @@ endef
 TARGET_DEVICES += nsy_g68-plus
 
 define Device/r68p_r68p
-\$(call Device/Legacy/rk3568,\$(1))
+\$(call Device/Legacy/rk3568,$(1))
   DEVICE_VENDOR := R68P
   DEVICE_MODEL := R68P RK3568 Box
   DEVICE_DTS := rk3568/rk3568-r68p
